@@ -1,13 +1,17 @@
 #!/bin/bash
 # run_wien2k.sh
-# 03/04/2019 F. Iwase
+# F. Iwase
+# 2019年  6月 19日 水曜日 11:26:36 JST
 
+NAME="CCl3COI"
 CDRE=`basename $(pwd)`
-P_move_s=( "0" )
+# 原子の移動量（Å）
+P_move_s=( "0" "0.1" "0.2" "0.3" "0.4" "0.5" "0.6" )
 P_rkmax_s=( "5.5" )
-P_angles=( "10" "20" "30" "40" "50" "60" )
-
-PARA_k="8"
+# 分子の回転（degree）どの原子を移動させるかなどは、rotation_template.txtで指定すること
+P_angles=( "0" )
+# ブリルアンゾーンにおけるk点の数
+P_k_s=( "8" )
 
 if [ -e ${CDRE}.sdf ]; then
   echo "sdf file found."
@@ -15,9 +19,9 @@ else
   echo "no sdf file. check sdf file! (sdf file name must be same with the directory name)"
   exit 1
 fi
-
+for P_k in ${P_k_s[@]}; do
 for P_rkmax in ${P_rkmax_s[@]}; do
-  PROJECT="CCl3COCl_"${PARA_k}"k_PBE_RKMAX"${P_rkmax//./_}"_len"
+  PROJECT=${NAME}"_10A_"${P_k}"k_PBE_RKM"${P_rkmax//./_}"_len"
   echo ${PROJECT}
 
 for P_move in ${P_move_s[@]}; do
@@ -34,7 +38,7 @@ for P_angle in ${P_angles[@]}; do
   python3 ~/WIEN2kdata/moveatom.py ${CDRE}.sdf 7 4 $MOVE ${CASE}/${CASE}.sdf
 # 分子原子の回転
 # rotation.txtのR_ANGLEを編集
-  sed s/R_ANGLE/${P_angle}/ ~/WIEN2kdata/rotation_template.txt > rotation.txt
+  sed s/R_ANGLE/${P_angle}/ ../rotation_template.txt > rotation.txt
   python3 ~/WIEN2kdata/rotatemol.py ${CASE}/${CASE}.sdf rotation.txt
 # sdf→ cif
   python3 ~/WIEN2kdata/sdf2cif.py ${CASE}/${CASE}_r.sdf 10.0 10.0 10.0 ${CASE}/${CASE}.cif
@@ -77,7 +81,8 @@ for P_angle in ${P_angles[@]}; do
 # -numk: X k-points in full BZ (defalt: 1000)
 
 #init_lapw -b -red 0 -vxc 13 -ecut -6.0 -rkmax 5 -numk 8
-  init_lapw -b -red 0 -vxc 13 -ecut -6.0 -rkmax ${P_rkmax} -numk ${PARA_k}
+echo P_rkmax:${P_rkmax} P_k:${P_k}
+  init_lapw -b -red 0 -vxc 13 -ecut -6.0 -rkmax ${P_rkmax} -numk ${P_k}
 
 
 # gmax > gmin チェック ########################################################
@@ -101,9 +106,9 @@ for P_angle in ${P_angles[@]}; do
   x lapw2 -efg
 
 # nQの計算 ####################################################################
-  python3 ~/WIEN2kdata/scf2nQ.py ${CASE}.scf > nQ.txt
+  python3 ~/WIEN2kdata/scf2nQ.py ${CASE}.scf > ${CASE}.nQ
 # total energy を追記  
-  grep :ENE ${CASE}.scf | tail -n 1 >> nQ.txt
+  grep :ENE ${CASE}.scf | tail -n 1 >> ${CASE}.nQ
 
 # Density of States (DOS)の計算 ###############################################
 # まずpartial charges を計算する。qtlファイルが作成される
@@ -113,8 +118,9 @@ for P_angle in ${P_angles[@]}; do
 
 # DOS を計算する.
   x tetra
-  grep :RKM ${CASE}.scf | tail -n 1 >> nQ.txt
-  grep :FER ${CASE}.scf | tail -n 1 >> nQ.txt
+  grep :RKM ${CASE}.scf | tail -n 1 >> ${CASE}.nQ
+  grep :KPT ${CASE}.scf | tail -n 1 >> ${CASE}.nQ
+  grep :FER ${CASE}.scf | tail -n 1 >> ${CASE}.nQ
 
 # 電荷密度の計算 ############################################
   cp ~/WIEN2kdata/wien2k2venus.py ./
@@ -129,9 +135,9 @@ for P_angle in ${P_angles[@]}; do
     exit 1
   fi
 
-  echo ${CASE}"  - END"`date`"   ------------------------"
+  echo ${CASE}"  - END "`date`"   ------------------------"
   cd ..
-
+done
 done
 done
 done

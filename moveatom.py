@@ -11,46 +11,57 @@ import os
 import sys
 import math
 import codecs
+import numpy as np
 
 def usage():
   message = u'usage: python3 moveatom.py sdf_file_name atom_origin atom_moving length[ang] [output_cif_file]'
   print(message)
   sys.exit()
 
-def sdfatom(path):
-  fout = codecs.open(outpath, 'w', 'utf-8')
-
-  atomx=[]
-  atomy=[]
-  atomz=[]
-  atom=[]
-  #bondmatrix=[]
+def readsdf(path):
   f = codecs.open(path, 'r', 'utf-8')
   i = 0
+  j = 0
+  k = 0
+  before = []
+  atom_zahyou = []
+  atom_syurui = []
+  after = []
   for line in f:
     # CID
     if i == 0:
-      cid = line.strip()
-      #print("_chemical_name_common '" + cid + "'")
-    # プログラム名(-OEChem-)、作成日時、次元(3D)など
-    elif i == 1:
       line = line.strip()
+      before.append(line + " edited by F. Iwase\n")
+      j = j + 1
+    elif i == 1:
+      before.append(line)
+      j = j + 1
+      #line = line.strip()
       #print(line)
     # コメント
     elif i == 2:
-      comment = line
+      before.append(line)
+      j = j + 1
+      #comment = line
     # 原子数、結合数、
     elif i == 3:
+      before.append(line)
       linelist = line.strip().split()
       atomn = linelist[0]
       bondn = linelist[1]
+      j = j + 1
     # x, y, z, 元素記号、
     elif (i - 4) < int(atomn):
       linelist = line.strip().split()
-      atomx.append(linelist[0])
-      atomy.append(linelist[1])
-      atomz.append(linelist[2])
-      atom.append(linelist[3])
+      x = linelist[0]
+      y = linelist[1]
+      z = linelist[2]
+      atom = linelist[3]
+      atom_zahyou.append([x, y, z])
+      atom_syurui.append(atom)
+      #atomy.append(linelist[1])
+      #atomz.append(linelist[2])
+      #atom.append(linelist[3])
       #lin = [s for s in atom if linelist[3] == re.sub('[0-9]','',s)]
       #atom.append(linelist[3]+str(len(lin)+1))
       #print(atom[i-4],j,' ', atom[i-4],' ', atomx[i-4],' ', atomy[i-4],' ', atomz[i-4], sep='')
@@ -60,16 +71,60 @@ def sdfatom(path):
     #  linelist = line.strip().split()
     #  bondmatrix.append(linelist[:3])
     #  print(bondmatrix[i-4-int(atomn)])
-    elif line.strip() == "M  END":
+    else:
+      after.append(line)
+      k = k + 1
+    #if line.strip() == "M  END":
       #print("end")
-      break
-    i = i+1
+    #  break
+    i = i + 1
   f.close()
-  return cid, atom, atomx, atomy, atomz
+
+  return before, atom_zahyou, atom_syurui, after
+
+def str2float(atom_zahyou):
+  float_atom = []
+  for atom in atom_zahyou:
+    float_number = []  
+    for number in atom:
+      float_number.append(float(number))
+    float_atom.append(float_number)
+  return float_atom
+  
+
+def moveatoms(atom_zahyou, atom_o, atom_m, length):
+  new_atom = [0,0,0]
+  origin_atom = np.array(atom_zahyou[int(atom_o)-1])
+  move_atom = np.array(atom_zahyou[int(atom_m)-1])
+  vector = move_atom - origin_atom
+  #print(origin_atom)
+  #print(move_atom)
+  u = np.linalg.norm(vector)
+  float_length = float(length)
+  print(float_length)
+  new_atom[0] = move_atom[0] + float_length * vector[0] / u 
+  new_atom[1] = move_atom[1] + float_length * vector[1] / u
+  new_atom[2] = move_atom[2] + float_length * vector[2] / u
+  atom_zahyou[int(atom_m)-1]=[new_atom[0],new_atom[1],new_atom[2]]
+  return atom_zahyou
+  
+def sdfout(outpath, before, atom_zahyou, atom_syurui, after):
+  fout = codecs.open(outpath, 'w', 'utf-8')
+  for line in before:
+    fout.write(line)
+  index = 0
+  for line in atom_zahyou:
+    fout.write(str(round(line[0],4)).rjust(10) + str(round(line[1],4)).rjust(10) + str(round(line[2],4)).rjust(10) + " " + atom_syurui[index].ljust(2) + "  0  0  0  0  0  0  0  0  0  0  0  0\n")
+    index = index + 1
+  for line in after:
+    fout.write(line)
+    
+  
+  fout.close()
 
 def main():
   args = sys.argv
-  if len(args) < 6 or len(args) > 7:
+  if len(args) < 5 or len(args) > 6:
     usage()
 
   path = args[1]
@@ -83,19 +138,11 @@ def main():
     outpath = root + '_m.sdf'
   print(outpath)
   
-  sdfatom(path, outpath, atom_0, atom_m, length)
+  before, atom_zahyou, atom_syurui, after = readsdf(path)
+  atom_zahyou = str2float(atom_zahyou)
+  atom_zahyou = moveatoms(atom_zahyou, atom_o, atom_m, length)
+  sdfout(outpath, before, atom_zahyou, atom_syurui, after)
   
-  fout.write("data_\n")
-  fout.write("_chemical_name_common '" + cid + "'\n")
-  fout.write(text + '\n')
-  index = 0
-  for item in atom:
-    #print(atom[index],index,' ', atom[index],' ', round(float(atomx[index])/float(lattice),6)+0.5,' ', round(float(atomy[index])/float(lattice),7)+0.5,' ', round(float(atomz[index])/float(lattice),6)+0.5, sep='')
-    write_text = str(atom[index]) + str(index) + ' ' + str(atom[index]) + ' ' + str(round(float(atomx[index])/float(lattice_x)+ 0.50,6)) + ' ' + str(round(float(atomy[index])/float(lattice_y)+0.50, 6)) + ' ' + str(round(float(atomz[index])/float(lattice_z)+0.50, 6)) + '\n'
-    fout.write(write_text)
-    index = index + 1
-
-  fout.close()
 
 if __name__ == "__main__":
   main()

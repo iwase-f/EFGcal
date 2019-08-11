@@ -1,8 +1,8 @@
 # 回転の原点座標または原子の番号
-6
+7
 # vector, origin_atom→ atomでもOK
-7 6
+5 7
 # angle
-R_ANGLE
+90
 # 移動する原子またはall
 1 2 3
